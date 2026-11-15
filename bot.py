@@ -13,6 +13,16 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-3.8-flash")
 
+# This instruction forces Gemini to answer in clean plain text, no LaTeX symbols
+PLAIN_TEXT_RULE = """IMPORTANT FORMATTING RULES:
+- Answer in plain text only. NEVER use LaTeX code.
+- Do not use $$, \\frac, \\partial, \\begin, or any backslash commands.
+- Write math like this: dz/dx = 2*(dz/dy) + z, x^2 means x squared, sqrt(4) means square root.
+- Use simple headers like "Step 1:" and "Answer:".
+- Keep it clean and easy to read in a plain chat app.
+Now solve this:
+"""
+
 async def send_long_message(message, text):
     # Telegram allows max 4096 characters per message, so split into chunks
     for i in range(0, len(text), 4000):
@@ -32,19 +42,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo = message.photo[-1]
             file = await context.bot.get_file(photo.file_id)
             photo_bytes = await file.download_as_bytearray()
-            prompt = "Solve this math problem step by step. Show clear working and final answer."
+            prompt = PLAIN_TEXT_RULE + "Solve this math problem step by step. Show clear working and the final answer."
             response = model.generate_content([
                 prompt,
                 {"mime_type": "image/jpeg", "data": bytes(photo_bytes)}
             ])
         else:
-            response = model.generate_content(message.text)
+            response = model.generate_content(PLAIN_TEXT_RULE + message.text)
 
-        # Use the chunk-sender for both text and photo answers
         await send_long_message(message, response.text)
 
     except Exception as e:
-        # If anything fails, tell the user instead of going silent
         await message.reply_text("Error: " + str(e))
 
 def main():
