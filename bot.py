@@ -1,4 +1,5 @@
 import os
+import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import google.generativeai as genai
@@ -10,8 +11,13 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
-# FIXED: old model name gemini-1.5-flash was deleted by Google. Use current one:
 model = genai.GenerativeModel("gemini-3.8-flash")
+
+async def send_long_message(message, text):
+    # Telegram allows max 4096 characters per message, so split into chunks
+    for i in range(0, len(text), 4000):
+        await message.reply_text(text[i:i+4000])
+        await asyncio.sleep(1)  # small pause between messages
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -33,7 +39,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])
         else:
             response = model.generate_content(message.text)
-        await message.reply_text(response.text)
+
+        # Use the chunk-sender for both text and photo answers
+        await send_long_message(message, response.text)
+
     except Exception as e:
         # If anything fails, tell the user instead of going silent
         await message.reply_text("Error: " + str(e))
